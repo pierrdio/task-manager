@@ -30,6 +30,30 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodPost {
+		var user User
+
+		err := json.NewDecoder(r.Body).Decode(&user)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintln(w, "invalid JSON")
+			return
+		}
+
+		newUser := User{
+			ID:   len(users) + 1,
+			Name: user.Name,
+			Age:  user.Age,
+		}
+
+		users = append(users, newUser)
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(newUser)
+		return
+	}
+
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	fmt.Fprintln(w, "method not allowed")
 }
@@ -54,6 +78,66 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 				user = u
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(user)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, "not found")
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		idStr := strings.TrimPrefix(r.URL.Path, "/users/")
+		id, err := strconv.Atoi(idStr)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintln(w, "invalid ID")
+			return
+		}
+
+		for i, user := range users {
+			if user.ID == id {
+				users = append(users[:i], users[i+1:]...)
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, "not found")
+		return
+	}
+
+	if r.Method == http.MethodPut {
+		var updatedUser User
+
+		idStr := strings.TrimPrefix(r.URL.Path, "/users/")
+		id, err := strconv.Atoi(idStr)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintln(w, "invalid ID")
+			return
+		}
+
+		err = json.NewDecoder(r.Body).Decode(&updatedUser)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintln(w, "invalid JSON")
+			return
+		}
+
+		for index, user := range users {
+			if user.ID == id {
+
+				users[index].Name = updatedUser.Name
+				users[index].Age = updatedUser.Age
+
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(users[index])
 				return
 			}
 		}
