@@ -41,9 +41,21 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if strings.TrimSpace(user.Name) == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintln(w, "name is required")
+			return
+		}
+
+		if user.Age <= 0 || user.Age > 120 {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintln(w, "incorrect age")
+			return
+		}
+
 		newUser := User{
 			ID:   len(users) + 1,
-			Name: user.Name,
+			Name: strings.TrimSpace(user.Name),
 			Age:  user.Age,
 		}
 
@@ -133,7 +145,19 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 		for index, user := range users {
 			if user.ID == id {
 
-				users[index].Name = updatedUser.Name
+				if strings.TrimSpace(updatedUser.Name) == "" {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintln(w, "name is required")
+					return
+				}
+
+				if updatedUser.Age <= 0 || updatedUser.Age > 120 {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintln(w, "incorrect age")
+					return
+				}
+
+				users[index].Name = strings.TrimSpace(updatedUser.Name)
 				users[index].Age = updatedUser.Age
 
 				w.WriteHeader(http.StatusOK)
