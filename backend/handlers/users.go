@@ -4,11 +4,13 @@ import (
 	"backend/models"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -108,114 +110,125 @@ func UsersHandler(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-func UserHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func UserHandler(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	if r.Method == http.MethodGet {
-		var user models.User
+		if r.Method == http.MethodGet {
 
-		idStr := strings.TrimPrefix(r.URL.Path, "/users/")
-		id, err := strconv.Atoi(idStr)
+			var name string
+			var age int
 
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "invalid ID")
-			return
-		}
+			idStr := strings.TrimPrefix(r.URL.Path, "/users/")
+			id, err := strconv.Atoi(idStr)
 
-		var users = []models.User{}
-
-		for _, u := range users {
-			if u.ID == id {
-				user = u
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(user)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid ID")
 				return
 			}
-		}
 
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintln(w, "not found")
-		return
-	}
-
-	if r.Method == http.MethodDelete {
-		idStr := strings.TrimPrefix(r.URL.Path, "/users/")
-		id, err := strconv.Atoi(idStr)
-
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "invalid ID")
-			return
-		}
-
-		var users = []models.User{}
-
-		for i, user := range users {
-			if user.ID == id {
-				users = append(users[:i], users[i+1:]...)
-				w.WriteHeader(http.StatusNoContent)
+			err = pool.QueryRow(
+				context.Background(),
+				"SELECT id, name, age FROM users WHERE id = $1", id).Scan(&id, &name, &age)
+			if errors.Is(err, pgx.ErrNoRows) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintln(w, "not found")
+				return
+			} else if err != nil {
+				fmt.Println("failed query:", err)
 				return
 			}
-		}
 
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintln(w, "not found")
-		return
-	}
+			user := models.User{
+				ID:   id,
+				Name: name,
+				Age:  age,
+			}
 
-	if r.Method == http.MethodPut {
-		var updatedUser models.User
-
-		idStr := strings.TrimPrefix(r.URL.Path, "/users/")
-		id, err := strconv.Atoi(idStr)
-
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "invalid ID")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(user)
 			return
 		}
 
-		err = json.NewDecoder(r.Body).Decode(&updatedUser)
+		if r.Method == http.MethodDelete {
+			idStr := strings.TrimPrefix(r.URL.Path, "/users/")
+			id, err := strconv.Atoi(idStr)
 
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "invalid JSON")
-			return
-		}
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid ID")
+				return
+			}
 
-		var users = []models.User{}
+			var users = []models.User{}
 
-		for index, user := range users {
-			if user.ID == id {
-
-				if strings.TrimSpace(updatedUser.Name) == "" {
-					w.WriteHeader(http.StatusBadRequest)
-					fmt.Fprintln(w, "name is required")
+			for i, user := range users {
+				if user.ID == id {
+					users = append(users[:i], users[i+1:]...)
+					w.WriteHeader(http.StatusNoContent)
 					return
 				}
-
-				if updatedUser.Age <= 0 || updatedUser.Age > 120 {
-					w.WriteHeader(http.StatusBadRequest)
-					fmt.Fprintln(w, "incorrect age")
-					return
-				}
-
-				users[index].Name = strings.TrimSpace(updatedUser.Name)
-				users[index].Age = updatedUser.Age
-
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(users[index])
-				return
 			}
+
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintln(w, "not found")
+			return
 		}
 
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintln(w, "not found")
+		if r.Method == http.MethodPut {
+			var updatedUser models.User
+
+			idStr := strings.TrimPrefix(r.URL.Path, "/users/")
+			id, err := strconv.Atoi(idStr)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid ID")
+				return
+			}
+
+			err = json.NewDecoder(r.Body).Decode(&updatedUser)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid JSON")
+				return
+			}
+
+			var users = []models.User{}
+
+			for index, user := range users {
+				if user.ID == id {
+
+					if strings.TrimSpace(updatedUser.Name) == "" {
+						w.WriteHeader(http.StatusBadRequest)
+						fmt.Fprintln(w, "name is required")
+						return
+					}
+
+					if updatedUser.Age <= 0 || updatedUser.Age > 120 {
+						w.WriteHeader(http.StatusBadRequest)
+						fmt.Fprintln(w, "incorrect age")
+						return
+					}
+
+					users[index].Name = strings.TrimSpace(updatedUser.Name)
+					users[index].Age = updatedUser.Age
+
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(users[index])
+					return
+				}
+			}
+
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintln(w, "not found")
+			return
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		fmt.Fprintln(w, "method not allowed")
 		return
 	}
-
-	w.WriteHeader(http.StatusMethodNotAllowed)
-	fmt.Fprintln(w, "method not allowed")
-	return
 }

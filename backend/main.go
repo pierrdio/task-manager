@@ -25,7 +25,7 @@ func main() {
 	})
 
 	http.HandleFunc("/users", handlers.UsersHandler(pool))
-	http.HandleFunc("/users/", handlers.UserHandler)
+	http.HandleFunc("/users/", handlers.UserHandler(pool))
 
 	fmt.Println("Server started on port", PORT)
 
