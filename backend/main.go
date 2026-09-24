@@ -24,7 +24,7 @@ func main() {
 		fmt.Fprintln(w, "task manager server")
 	})
 
-	http.HandleFunc("/users", handlers.UsersHandler)
+	http.HandleFunc("/users", handlers.UsersHandler(pool))
 	http.HandleFunc("/users/", handlers.UserHandler)
 
 	fmt.Println("Server started on port", PORT)

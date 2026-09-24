@@ -2,67 +2,99 @@ package handlers
 
 import (
 	"backend/models"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var users = []models.User{
-	{ID: 1, Name: "Max", Age: 20},
-	{ID: 2, Name: "John", Age: 25},
-	{ID: 3, Name: "Ben", Age: 17},
-	{ID: 4, Name: "Martin", Age: 23},
-}
+func UsersHandler(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 
-func UsersHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+		var users = []models.User{}
 
-	if r.Method == http.MethodGet {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(users)
-		return
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method == http.MethodGet {
+			rows, err := pool.Query(
+				context.Background(),
+				"SELECT id, name, age FROM users")
+			if err != nil {
+				fmt.Println("failed query:", err)
+				return
+			}
+
+			defer rows.Close()
+
+			for rows.Next() {
+				var id int
+				var name string
+				var age int
+
+				err := rows.Scan(&id, &name, &age)
+
+				if err != nil {
+					fmt.Println("failed scan:", err)
+					return
+				}
+
+				user := models.User{
+					ID:   id,
+					Name: name,
+					Age:  age,
+				}
+
+				users = append(users, user)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(users)
+			return
+		}
+
+		if r.Method == http.MethodPost {
+			var user models.User
+
+			err := json.NewDecoder(r.Body).Decode(&user)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid JSON")
+				return
+			}
+
+			if strings.TrimSpace(user.Name) == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "name is required")
+				return
+			}
+
+			if user.Age <= 0 || user.Age > 120 {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "incorrect age")
+				return
+			}
+
+			newUser := models.User{
+				ID:   len(users) + 1,
+				Name: strings.TrimSpace(user.Name),
+				Age:  user.Age,
+			}
+
+			users = append(users, newUser)
+
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(newUser)
+			return
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		fmt.Fprintln(w, "method not allowed")
 	}
-
-	if r.Method == http.MethodPost {
-		var user models.User
-
-		err := json.NewDecoder(r.Body).Decode(&user)
-
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "invalid JSON")
-			return
-		}
-
-		if strings.TrimSpace(user.Name) == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "name is required")
-			return
-		}
-
-		if user.Age <= 0 || user.Age > 120 {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintln(w, "incorrect age")
-			return
-		}
-
-		newUser := models.User{
-			ID:   len(users) + 1,
-			Name: strings.TrimSpace(user.Name),
-			Age:  user.Age,
-		}
-
-		users = append(users, newUser)
-
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(newUser)
-		return
-	}
-
-	w.WriteHeader(http.StatusMethodNotAllowed)
-	fmt.Fprintln(w, "method not allowed")
 }
 
 func UserHandler(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +111,8 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "invalid ID")
 			return
 		}
+
+		var users = []models.User{}
 
 		for _, u := range users {
 			if u.ID == id {
@@ -103,6 +137,8 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "invalid ID")
 			return
 		}
+
+		var users = []models.User{}
 
 		for i, user := range users {
 			if user.ID == id {
@@ -136,6 +172,8 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "invalid JSON")
 			return
 		}
+
+		var users = []models.User{}
 
 		for index, user := range users {
 			if user.ID == id {
