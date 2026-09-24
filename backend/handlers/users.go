@@ -161,18 +161,19 @@ func UserHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				return
 			}
 
-			var users = []models.User{}
-
-			for i, user := range users {
-				if user.ID == id {
-					users = append(users[:i], users[i+1:]...)
-					w.WriteHeader(http.StatusNoContent)
-					return
-				}
+			result, err := pool.Exec(
+				context.Background(),
+				"DELETE FROM users WHERE id = $1", id)
+			if err != nil {
+				fmt.Println("failed exec:", err)
+				return
+			} else if result.RowsAffected() == 0 {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintf(w, "not found")
+				return
 			}
 
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintln(w, "not found")
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
