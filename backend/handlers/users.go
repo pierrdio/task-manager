@@ -15,11 +15,12 @@ import (
 func UsersHandler(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		var users = []models.User{}
-
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method == http.MethodGet {
+
+			var users = []models.User{}
+
 			rows, err := pool.Query(
 				context.Background(),
 				"SELECT id, name, age FROM users")
@@ -57,9 +58,13 @@ func UsersHandler(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		if r.Method == http.MethodPost {
-			var user models.User
 
-			err := json.NewDecoder(r.Body).Decode(&user)
+			var id int
+			var name string
+			var age int
+			var newUser models.User
+
+			err := json.NewDecoder(r.Body).Decode(&newUser)
 
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
@@ -67,25 +72,31 @@ func UsersHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				return
 			}
 
-			if strings.TrimSpace(user.Name) == "" {
+			if strings.TrimSpace(newUser.Name) == "" {
 				w.WriteHeader(http.StatusBadRequest)
 				fmt.Fprintln(w, "name is required")
 				return
 			}
 
-			if user.Age <= 0 || user.Age > 120 {
+			if newUser.Age <= 0 || newUser.Age > 120 {
 				w.WriteHeader(http.StatusBadRequest)
 				fmt.Fprintln(w, "incorrect age")
 				return
 			}
 
-			newUser := models.User{
-				ID:   len(users) + 1,
-				Name: strings.TrimSpace(user.Name),
-				Age:  user.Age,
+			err = pool.QueryRow(
+				context.Background(),
+				"INSERT into users (name, age) VALUES ($1, $2) RETURNING id, name, age", newUser.Name, newUser.Age).Scan(&id, &name, &age)
+			if err != nil {
+				fmt.Println("failed query:", err)
+				return
 			}
 
-			users = append(users, newUser)
+			newUser = models.User{
+				ID:   id,
+				Name: strings.TrimSpace(newUser.Name),
+				Age:  newUser.Age,
+			}
 
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(newUser)
