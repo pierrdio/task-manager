@@ -4,9 +4,13 @@ import (
 	"backend/models"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -54,6 +58,59 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(tasks)
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, "method not allowed")
+		return
+	}
+}
+
+func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method == http.MethodGet {
+
+			var id int
+			var title string
+			var description string
+			var completed bool
+			var user_id int
+
+			idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
+			id, err := strconv.Atoi(idStr)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid ID")
+				return
+			}
+
+			err = pool.QueryRow(
+				context.Background(),
+				"SELECT id, title, description, completed, user_id FROM tasks WHERE id = $1", id).Scan(&id, &title, &description, &completed, &user_id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintln(w, "not found")
+				return
+			} else if err != nil {
+				fmt.Println("failed query:", err)
+				return
+			}
+
+			task := models.Task{
+				ID:          id,
+				Title:       title,
+				Description: description,
+				Completed:   completed,
+				UserID:      user_id,
+			}
+
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(&task)
 			return
 		}
 

@@ -26,7 +26,9 @@ func main() {
 
 	http.HandleFunc("/users", handlers.UsersHandler(pool))
 	http.HandleFunc("/users/", handlers.UserHandler(pool))
+
 	http.HandleFunc("/tasks", handlers.TasksHandler(pool))
+	http.HandleFunc("/tasks/", handlers.TaskHandler(pool))
 
 	fmt.Println("Server started on port", PORT)
 
