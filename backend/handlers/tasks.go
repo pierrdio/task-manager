@@ -61,6 +61,57 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		if r.Method == http.MethodPost {
+
+			var newTask models.Task
+
+			var id int
+			var title string
+			var description string
+			var completed bool
+			var user_id int
+
+			err := json.NewDecoder(r.Body).Decode(&newTask)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid JSON")
+				return
+			}
+
+			if strings.TrimSpace(newTask.Title) == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "title is required")
+				return
+			}
+
+			newTask.Completed = false
+
+			err = pool.QueryRow(
+				context.Background(),
+				"INSERT into tasks (title, description, completed, user_id) VALUES ($1, $2, $3, $4) RETURNING id, title, description, completed, user_id", newTask.Title, newTask.Description, newTask.Completed, newTask.UserID).Scan(&id, &title, &description, &completed, &user_id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintln(w, "not found")
+				return
+			} else if err != nil {
+				fmt.Println("failed query:", err)
+				return
+			}
+
+			newTask = models.Task{
+				ID:          id,
+				Title:       title,
+				Description: description,
+				Completed:   completed,
+				UserID:      user_id,
+			}
+
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(&newTask)
+			return
+		}
+
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintln(w, "method not allowed")
 		return
