@@ -189,6 +189,8 @@ func UserHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				return
 			}
 
+			updatedUser.ID = id
+
 			err = json.NewDecoder(r.Body).Decode(&updatedUser)
 
 			if err != nil {
@@ -197,34 +199,32 @@ func UserHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				return
 			}
 
-			var users = []models.User{}
-
-			for index, user := range users {
-				if user.ID == id {
-
-					if strings.TrimSpace(updatedUser.Name) == "" {
-						w.WriteHeader(http.StatusBadRequest)
-						fmt.Fprintln(w, "name is required")
-						return
-					}
-
-					if updatedUser.Age <= 0 || updatedUser.Age > 120 {
-						w.WriteHeader(http.StatusBadRequest)
-						fmt.Fprintln(w, "incorrect age")
-						return
-					}
-
-					users[index].Name = strings.TrimSpace(updatedUser.Name)
-					users[index].Age = updatedUser.Age
-
-					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(users[index])
-					return
-				}
+			if strings.TrimSpace(updatedUser.Name) == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "name is required")
+				return
 			}
 
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintln(w, "not found")
+			if updatedUser.Age <= 0 || updatedUser.Age > 120 {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "incorrect age")
+				return
+			}
+
+			err = pool.QueryRow(
+				context.Background(),
+				"UPDATE users SET name = $1, age = $2 WHERE id = $3 RETURNING id, name, age", updatedUser.Name, updatedUser.Age, updatedUser.ID).Scan(&updatedUser.ID, &updatedUser.Name, &updatedUser.Age)
+			if errors.Is(err, pgx.ErrNoRows) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintln(w, "not found")
+				return
+			} else if err != nil {
+				fmt.Println("failed query:", err)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(updatedUser)
 			return
 		}
 
