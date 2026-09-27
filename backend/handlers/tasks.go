@@ -224,6 +224,32 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		if r.Method == http.MethodDelete {
+			idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
+			id, err := strconv.Atoi(idStr)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid ID")
+				return
+			}
+
+			deleted, err := pool.Exec(
+				context.Background(),
+				"DELETE FROM tasks WHERE id = $1", id)
+			if err != nil {
+				fmt.Println("failed exec:", err)
+				return
+			} else if deleted.RowsAffected() == 0 {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintln(w, "not found")
+				return
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintln(w, "method not allowed")
 		return
