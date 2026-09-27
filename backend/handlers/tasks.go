@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -36,9 +37,9 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				var title string
 				var description string
 				var completed bool
-				var user_id int
+				var userID int
 
-				err := rows.Scan(&id, &title, &description, &completed, &user_id)
+				err := rows.Scan(&id, &title, &description, &completed, &userID)
 
 				if err != nil {
 					fmt.Println("failed scan:", err)
@@ -50,7 +51,7 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 					Title:       title,
 					Description: description,
 					Completed:   completed,
-					UserID:      user_id,
+					UserID:      userID,
 				}
 
 				tasks = append(tasks, newTask)
@@ -69,7 +70,7 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			var title string
 			var description string
 			var completed bool
-			var user_id int
+			var userID int
 
 			err := json.NewDecoder(r.Body).Decode(&newTask)
 
@@ -89,12 +90,16 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 			err = pool.QueryRow(
 				context.Background(),
-				"INSERT into tasks (title, description, completed, user_id) VALUES ($1, $2, $3, $4) RETURNING id, title, description, completed, user_id", newTask.Title, newTask.Description, newTask.Completed, newTask.UserID).Scan(&id, &title, &description, &completed, &user_id)
-			if errors.Is(err, pgx.ErrNoRows) {
-				w.WriteHeader(http.StatusNotFound)
-				fmt.Fprintln(w, "not found")
-				return
-			} else if err != nil {
+				"INSERT into tasks (title, description, completed, user_id) VALUES ($1, $2, $3, $4) RETURNING id, title, description, completed, user_id", newTask.Title, newTask.Description, newTask.Completed, newTask.UserID).Scan(&id, &title, &description, &completed, &userID)
+			if err != nil {
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) {
+					if pgErr.Code == "23503" {
+						w.WriteHeader(http.StatusNotFound)
+						fmt.Fprintln(w, "user not found")
+						return
+					}
+				}
 				fmt.Println("failed query:", err)
 				return
 			}
@@ -104,7 +109,7 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				Title:       title,
 				Description: description,
 				Completed:   completed,
-				UserID:      user_id,
+				UserID:      userID,
 			}
 
 			w.WriteHeader(http.StatusCreated)
@@ -112,7 +117,7 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		fmt.Fprintln(w, "method not allowed")
 		return
 	}
@@ -129,7 +134,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			var title string
 			var description string
 			var completed bool
-			var user_id int
+			var userID int
 
 			idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
 			id, err := strconv.Atoi(idStr)
@@ -142,7 +147,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 			err = pool.QueryRow(
 				context.Background(),
-				"SELECT id, title, description, completed, user_id FROM tasks WHERE id = $1", id).Scan(&id, &title, &description, &completed, &user_id)
+				"SELECT id, title, description, completed, user_id FROM tasks WHERE id = $1", id).Scan(&id, &title, &description, &completed, &userID)
 			if errors.Is(err, pgx.ErrNoRows) {
 				w.WriteHeader(http.StatusNotFound)
 				fmt.Fprintln(w, "not found")
@@ -157,7 +162,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				Title:       title,
 				Description: description,
 				Completed:   completed,
-				UserID:      user_id,
+				UserID:      userID,
 			}
 
 			w.WriteHeader(http.StatusOK)
@@ -172,7 +177,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			var title string
 			var description string
 			var completed bool
-			var user_id int
+			var userID int
 
 			idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
 			id, err := strconv.Atoi(idStr)
@@ -201,7 +206,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 			err = pool.QueryRow(
 				context.Background(),
-				"UPDATE tasks SET title = $1, description = $2, completed = $3 WHERE id = $4 RETURNING id, title, description, completed, user_id", updatedTask.Title, updatedTask.Description, updatedTask.Completed, updatedTask.ID).Scan(&id, &title, &description, &completed, &user_id)
+				"UPDATE tasks SET title = $1, description = $2, completed = $3 WHERE id = $4 RETURNING id, title, description, completed, userID", updatedTask.Title, updatedTask.Description, updatedTask.Completed, updatedTask.ID).Scan(&id, &title, &description, &completed, &userID)
 			if errors.Is(err, pgx.ErrNoRows) {
 				w.WriteHeader(http.StatusNotFound)
 				fmt.Fprintln(w, "not found")
@@ -216,7 +221,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 				Title:       title,
 				Description: description,
 				Completed:   completed,
-				UserID:      user_id,
+				UserID:      userID,
 			}
 
 			w.WriteHeader(http.StatusOK)
@@ -250,7 +255,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		fmt.Fprintln(w, "method not allowed")
 		return
 	}
