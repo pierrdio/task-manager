@@ -165,6 +165,65 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		if r.Method == http.MethodPut {
+			var updatedTask models.Task
+
+			var id int
+			var title string
+			var description string
+			var completed bool
+			var user_id int
+
+			idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
+			id, err := strconv.Atoi(idStr)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid ID")
+				return
+			}
+
+			err = json.NewDecoder(r.Body).Decode(&updatedTask)
+
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "invalid JSON")
+				return
+			}
+
+			if strings.TrimSpace(updatedTask.Title) == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, "title is required")
+				return
+			}
+
+			updatedTask.ID = id
+
+			err = pool.QueryRow(
+				context.Background(),
+				"UPDATE tasks SET title = $1, description = $2, completed = $3 WHERE id = $4 RETURNING id, title, description, completed, user_id", updatedTask.Title, updatedTask.Description, updatedTask.Completed, updatedTask.ID).Scan(&id, &title, &description, &completed, &user_id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintln(w, "not found")
+				return
+			} else if err != nil {
+				fmt.Println("failed query:", err)
+				return
+			}
+
+			updatedTask = models.Task{
+				ID:          id,
+				Title:       title,
+				Description: description,
+				Completed:   completed,
+				UserID:      user_id,
+			}
+
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(updatedTask)
+			return
+		}
+
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintln(w, "method not allowed")
 		return
