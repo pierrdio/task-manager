@@ -206,7 +206,7 @@ func TaskHandler(pool *pgxpool.Pool) http.HandlerFunc {
 
 			err = pool.QueryRow(
 				context.Background(),
-				"UPDATE tasks SET title = $1, description = $2, completed = $3 WHERE id = $4 RETURNING id, title, description, completed, userID", updatedTask.Title, updatedTask.Description, updatedTask.Completed, updatedTask.ID).Scan(&id, &title, &description, &completed, &userID)
+				"UPDATE tasks SET title = $1, description = $2, completed = $3 WHERE id = $4 RETURNING id, title, description, completed, user_id", updatedTask.Title, updatedTask.Description, updatedTask.Completed, updatedTask.ID).Scan(&id, &title, &description, &completed, &userID)
 			if errors.Is(err, pgx.ErrNoRows) {
 				w.WriteHeader(http.StatusNotFound)
 				fmt.Fprintln(w, "not found")
