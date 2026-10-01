@@ -20,46 +20,208 @@ func TasksHandler(pool *pgxpool.Pool) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method == http.MethodGet {
+
 			var tasks = []models.Task{}
 
-			rows, err := pool.Query(
-				context.Background(),
-				"SELECT id, title, description, completed, user_id FROM tasks")
-			if err != nil {
-				fmt.Println("failed query:", err)
-				return
-			}
+			queryUserIDStr := r.URL.Query().Get("user_id")
+			queryCompletedStr := r.URL.Query().Get("completed")
 
-			defer rows.Close()
-
-			for rows.Next() {
-				var id int
-				var title string
-				var description string
-				var completed bool
-				var userID int
-
-				err := rows.Scan(&id, &title, &description, &completed, &userID)
+			if queryUserIDStr != "" && queryCompletedStr != "" {
+				queryCompleted, err := strconv.ParseBool(queryCompletedStr)
 
 				if err != nil {
-					fmt.Println("failed scan:", err)
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintln(w, "invalid status")
 					return
 				}
 
-				newTask := models.Task{
-					ID:          id,
-					Title:       title,
-					Description: description,
-					Completed:   completed,
-					UserID:      userID,
+				queryUserID, err := strconv.Atoi(queryUserIDStr)
+
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintln(w, "invalid user_id")
+					return
 				}
 
-				tasks = append(tasks, newTask)
+				rows, err := pool.Query(
+					context.Background(),
+					"SELECT id, title, description, completed, user_id FROM tasks WHERE user_id = $1 AND completed = $2", queryUserID, queryCompleted)
+				if err != nil {
+					fmt.Println("failed query:", err)
+					return
+				}
+
+				defer rows.Close()
+
+				for rows.Next() {
+					var id int
+					var title string
+					var description string
+					var completed bool
+					var userID int
+
+					err := rows.Scan(&id, &title, &description, &completed, &userID)
+
+					if err != nil {
+						fmt.Println("failed scan:", err)
+						return
+					}
+
+					task := models.Task{
+						ID:          id,
+						Title:       title,
+						Description: description,
+						Completed:   completed,
+						UserID:      userID,
+					}
+
+					tasks = append(tasks, task)
+				}
+
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(tasks)
+				return
 			}
 
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(tasks)
-			return
+			if queryCompletedStr != "" {
+				queryCompleted, err := strconv.ParseBool(queryCompletedStr)
+
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintln(w, "invalid status")
+					return
+				}
+
+				rows, err := pool.Query(
+					context.Background(),
+					"SELECT id, title, description, completed, user_id FROM tasks WHERE completed = $1", queryCompleted)
+				if err != nil {
+					fmt.Println("failed query:", err)
+					return
+				}
+
+				defer rows.Close()
+
+				for rows.Next() {
+					var id int
+					var title string
+					var description string
+					var completed bool
+					var userID int
+
+					err := rows.Scan(&id, &title, &description, &completed, &userID)
+
+					if err != nil {
+						fmt.Println("failed scan:", err)
+						return
+					}
+
+					task := models.Task{
+						ID:          id,
+						Title:       title,
+						Description: description,
+						Completed:   completed,
+						UserID:      userID,
+					}
+
+					tasks = append(tasks, task)
+				}
+
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(tasks)
+				return
+			}
+
+			if queryUserIDStr == "" {
+				rows, err := pool.Query(
+					context.Background(),
+					"SELECT id, title, description, completed, user_id FROM tasks")
+				if err != nil {
+					fmt.Println("failed query:", err)
+					return
+				}
+
+				defer rows.Close()
+
+				for rows.Next() {
+					var id int
+					var title string
+					var description string
+					var completed bool
+					var userID int
+
+					err := rows.Scan(&id, &title, &description, &completed, &userID)
+
+					if err != nil {
+						fmt.Println("failed scan:", err)
+						return
+					}
+
+					task := models.Task{
+						ID:          id,
+						Title:       title,
+						Description: description,
+						Completed:   completed,
+						UserID:      userID,
+					}
+
+					tasks = append(tasks, task)
+				}
+
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(tasks)
+				return
+			}
+
+			if queryUserIDStr != "" {
+				queryUserID, err := strconv.Atoi(queryUserIDStr)
+
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintln(w, "invalid user_id")
+					return
+				}
+
+				rows, err := pool.Query(
+					context.Background(),
+					"SELECT id, title, description, completed, user_id FROM tasks WHERE user_id = $1", queryUserID)
+				if err != nil {
+					fmt.Println("failed query:", err)
+					return
+				}
+
+				defer rows.Close()
+
+				for rows.Next() {
+					var id int
+					var title string
+					var description string
+					var completed bool
+					var userID int
+
+					err = rows.Scan(&id, &title, &description, &completed, &userID)
+
+					if err != nil {
+						fmt.Println("failed scan:", err)
+						return
+					}
+
+					task := models.Task{
+						ID:          id,
+						Title:       title,
+						Description: description,
+						Completed:   completed,
+						UserID:      userID,
+					}
+
+					tasks = append(tasks, task)
+				}
+
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(tasks)
+				return
+			}
+
 		}
 
 		if r.Method == http.MethodPost {
